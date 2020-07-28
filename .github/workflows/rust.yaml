@@ -9,9 +9,9 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust-version: [1.40.0, beta, nightly]
+        rust-version: [1.40.0]
         include:
-        - rust-version: nightly
+        - rust-version: 1.40.0
           continue-on-error: true
 
     steps:
@@ -24,9 +24,12 @@ jobs:
       run: |
         rustup component add rustfmt
         cargo fmt --all -- --check
+      working-directory: solang-server
     - name: Build
       continue-on-error: ${{ matrix.continue-on-error }}
       run: cargo build --all --verbose
+      working-directory: solang-server
     - name: Run tests
       continue-on-error: ${{ matrix.continue-on-error }}
       run: cargo test --all --verbose
+      working-directory: solang-server
