@@ -9,16 +9,143 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust-version: [1.40.0]
+        rust-version: [1.40.0, beta, nightly]
         include:
-        - rust-version: 1.40.0
+        - rust-version: beta
           continue-on-error: true
 
     steps:
     - uses: hecrj/setup-rust-action@master
       with:
         rust-version: ${{ matrix.rust-version }}
+    - uses: actions/checkout@v1 ￼ Preview changes
+￼
+Spaces
+￼
+2
+￼
+No wrap
+1
+name: rust
+2
+​
+3
+on: [push, pull_request]
+4
+​
+5
+jobs:
+6
+  build:
+7
+    name: Rust ${{ matrix.rust-version }} on ${{ matrix.os }}
+8
+    runs-on: ${{ matrix.os }}
+9
+    strategy:
+10
+      matrix:
+11
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+12
+        rust-version: [1.40.0, beta, nightly]
+13
+        include:
+14
+        - rust-version: beta
+15
+          continue-on-error: true
+16
+​
+17
+    steps:
+18
+    - uses: hecrj/setup-rust-action@master
+19
+      with:
+20
+        rust-version: ${{ matrix.rust-version }}
+21
     - uses: actions/checkout@v1
+22
+    - name: Check formatting
+23
+      if: matrix.rust-version != 'nightly'
+24
+      run: |
+25
+        rustup component add rustfmt
+26
+        cargo fmt --all -- --check
+27
+      working-directory: solang-server
+28
+    - name: Build
+29
+      continue-on-error: ${{ matrix.continue-on-error }}
+30
+      run: cargo build --all --verbose
+31
+      working-directory: solang-server
+32
+    - name: Run tests
+33
+      continue-on-error: ${{ matrix.continue-on-error }}
+34
+      run: cargo test --all --verbose
+35
+      working-directory: solang-server
+36
+​
+Use Control + Space to trigger autocomplete in most situations.
+￼ Marketplace
+￼ Documentation
+￼
+Featured Actions
+￼
+￼ Cache
+By actions 
+
+Cache artifacts like dependencies and build outputs to improve workflow execution time
+
+ 1.3k
+￼
+￼ Setup Go environment
+By actions 
+
+Setup a Go environment and add it to the PATH
+
+ 248
+￼
+￼ Setup Java JDK
+By actions 
+
+Set up a specific version of the Java JDK and add the command-line tools to the PATH
+
+ 215
+￼
+￼ Close Stale Issues
+By actions 
+
+Close issues and pull requests with no recent activity
+
+ 213
+￼
+￼ First interaction
+By actions 
+
+Get started with Container actions
+
+ 59
+Featured categories
+￼ Code quality
+￼ Continuous integration
+￼ Deployment
+￼ Monitoring
+￼ Project management
+￼ Testing
+Browse all actions on the GitHub Marketplace
+Start commit 
     - name: Check formatting
       if: matrix.rust-version != 'nightly'
       run: |
