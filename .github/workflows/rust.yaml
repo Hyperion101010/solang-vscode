@@ -1,35 +1,23 @@
-name: rust
 
 on: [push, pull_request]
 
+name: Rust
+
 jobs:
   build:
-    name: Rust ${{ matrix.rust-version }} on ${{ matrix.os }}
+    name: Build and format
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust-version: [1.40.0]
-        include:
-        - rust-version: 1.40.0
-          continue-on-error: true
-
     steps:
-    - uses: hecrj/setup-rust-action@master
-      with:
-        rust-version: ${{ matrix.rust-version }}
-    - uses: actions/checkout@v1
-    - name: Check formatting
-      if: matrix.rust-version != 'nightly'
-      run: |
-        rustup component add rustfmt
-        cargo fmt --all -- --check
-      working-directory: solang-server
-    - name: Build
-      continue-on-error: ${{ matrix.continue-on-error }}
-      run: cargo build --all --verbose
-      working-directory: solang-server
-    - name: Run tests
-      continue-on-error: ${{ matrix.continue-on-error }}
-      run: cargo test --all --verbose
-      working-directory: solang-server
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: cargo build
+        working-directory: solang-server
+      - run: cargo fmt --all
+        working-directory: solang-server
