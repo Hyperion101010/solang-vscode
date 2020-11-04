@@ -13,6 +13,8 @@ use solang::sema::*;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
+//use std::rc::Rc;
+
 use solang::*;
 
 use solang::sema::ast::*;
@@ -22,6 +24,12 @@ use solang::parser::pt;
 use solang::sema::ast::Expression::*;
 
 use solang::sema::tags::*;
+
+//use solang::sema::builtin;
+//use solang::sema::builtin::Prototype;
+//use solang::sema::builtin::BUILTIN_FUNCTIONS;
+//use solang::sema::builtin::BUILTIN_VARIABLE;
+use solang::sema::builtin::get_prototype;
 
 #[derive(Debug, Default)]
 pub struct Backend {
@@ -69,13 +77,22 @@ impl Backend {
                 ast::Level::Debug => continue,
             };
 
+            /*
             let fl = &ns.files[pos.0];
 
             let file_cont = filecache.get_file_contents(fl.as_str());
+            */
+            let mut file_str = " ".to_owned();
+            for fils in ns.files.iter() {
+                //let fl = &ns.files[indx];
+                let file_cont = filecache.get_file_contents(fils.as_str());
+                file_str.push_str(file_cont.as_str()); //format!("{}{}", file_str, file_cont.as_str());
+                //indx+=1;
+            }
 
-            let l1 = Backend::file_offset_to_line_column(&file_cont.as_str(), pos.1);
+            let l1 = Backend::file_offset_to_line_column(&file_str, pos.1);
 
-            let l2 = Backend::file_offset_to_line_column(&file_cont.as_str(), pos.2);
+            let l2 = Backend::file_offset_to_line_column(&file_str, pos.2);
 
             let p1 = Position::new(l1.0 as u64, l1.1 as u64);
 
@@ -122,16 +139,27 @@ impl Backend {
         msg
     }
 
-    /*
-    fn construct_builtins(bin: sema::ast::Builtin) -> String {
-        let msg = format!("built-ins");
-        match bin {
-            PayableSend => {
-                
-            }
+    fn construct_builtins(bltn: &sema::ast::Builtin , ns: &ast::Namespace) -> String {
+        let mut msg = format!("[built-in] ");
+        let prot = get_prototype(bltn.clone());
 
+        if let Some(protval) = prot {
+            match &protval.builtin {
+                _ => {
+                    for ret in protval.ret {
+                        msg = format!("{} {}", msg, ret.to_string(ns));
+                    }
+                    msg = format!("{} {} (", msg, protval.name);
+                    for arg in protval.args {
+                        msg = format!("{}{}", msg, arg.to_string(ns));
+                    }
+                    msg = format!("{}): {}", msg, protval.doc.to_string());
+                }            
+            }
         }
-    }*/
+        msg
+    }
+
 
     // Constructs lookup table(messages) for the given statement by traversing the
     // statements and traversing inside the contents of the statements.
@@ -221,6 +249,7 @@ impl Backend {
             Statement::Emit {
                 loc,
                 event_no,
+                event_loc: _,
                 args,
             } => {
                 let fnc_ky = format!("{}{}", &ns.events[*event_no].name, &ns.events[*event_no].signature);
@@ -592,9 +621,88 @@ impl Backend {
                 gas,
             } => {
 
-                let fnc_nam = &ns.contracts[*contract_no].functions[*function_no].name;
-                let n_msg = format!("external func call for {}", fnc_nam[..].to_string());
-                lookup_tbl.push((loc.1 as u64, loc.2 as u64, n_msg));
+                //let fnc_nam = &ns.contracts[*contract_no].functions[*function_no].name;
+                //let fnc_sig = &ns.contracts[*contract_no].functions[*function_no].signature;
+
+                let fnc = &ns.contracts[*contract_no].functions[*function_no]; 
+                let msg_tg = render(&fnc.tags[..]);
+                let fnc_msg_type = Backend::construct_fnc(&fnc.ty);
+                let mut param_msg = format!("{} \n {} {}(",msg_tg ,fnc_msg_type, fnc.name);
+    
+                    for parm in &fnc.params {
+                        match parm.ty {
+                                Type::Struct(no) => {
+                                    let fnc_ky = format!("{}", ns.structs[no].name);
+
+                                    if fnc_map.contains_key(&fnc_ky) {
+                                        match fnc_map.get(&fnc_ky) {
+                                            Some(ans) => {
+                                                    let nm = format!("{}", ans[..].to_string());
+                                                    lookup_tbl.push((parm.loc.1 as u64, (parm.loc.2 /*+ fnc_ky.len() + 7*/) as u64, nm));
+                                                }
+                                                _ => {
+                                                    let nm = format!("unable to parse {}", fnc_ky);
+                                                    lookup_tbl.push((parm.loc.1 as u64, (parm.loc.2 /*+ fnc_ky.len() + 7*/) as u64, nm));
+                                                }
+                                            }
+                                        }
+                                }
+                                
+                                Type::Enum(no) => {
+                                    let fnc_ky = format!("{}", ns.enums[no].name);
+            
+                                    if fnc_map.contains_key(&fnc_ky) {
+                                        match fnc_map.get(&fnc_ky) {
+                                            Some(ans) => {
+                                                    let nm = format!("{}", ans[..].to_string());
+                                                    lookup_tbl.push((parm.loc.1 as u64, (parm.loc.2 /*+ fnc_ky.len() + 5*/) as u64, nm));
+                                                }
+                                                _ => {
+                                                    let nm = format!("unable to parse {}", fnc_ky);
+                                                    lookup_tbl.push((parm.loc.1 as u64, (parm.loc.2 /*+ fnc_ky.len() + 7*/) as u64, nm));
+                                                }
+                                            }
+                                        }
+                                }
+    
+                                _ => {
+                                    let msg = format!("{}:{}, ",  parm.name ,parm.ty.to_string(ns));
+                                    param_msg = format!("{} {}", param_msg, msg);
+                                }
+                            }
+                        }
+                    
+                    param_msg = format!("{} ) returns (", param_msg);
+    
+                    for ret in &fnc.returns {
+                        let msg = format!("{}:{}, ", ret.name, ret.ty.to_string(ns));
+                        param_msg = format!("{} {}", param_msg, msg);
+                    }
+    
+                    param_msg = format!("{})", param_msg);
+                    lookup_tbl.push((loc.1 as u64, loc.2 as u64, param_msg));
+
+                /*
+                let fnc_ky = format!("{}{}", fnc_nam, fnc_sig);
+
+                if fnc_map.contains_key(&fnc_ky) {
+                    match fnc_map.get(&fnc_ky) {
+                        Some(ans) => {
+                                let nm = format!("{} we got in for no reason", ans[..].to_string());
+                                lookup_tbl.push((loc.1 as u64, loc.2 as u64, nm));
+                        }
+                        _ => {
+                            let n_msg = format!("contains not found for {}", fnc_nam[..].to_string());
+                            lookup_tbl.push((loc.1 as u64, loc.2 as u64, n_msg));
+                        }
+                    }
+                }
+                else {
+                    //let fnc_nam = &ns.contracts[*contract_no].functions[*function_no].name;
+                    let n_msg = format!("external func call for {}  as {}", fnc_nam[..].to_string(), fnc_ky);
+                    lookup_tbl.push((loc.1 as u64, loc.2 as u64, n_msg));
+                }
+                */
                 Backend::construct_expr(address, lookup_tbl, symtab,fnc_map, ns);
                 for expp in args {
                     Backend::construct_expr(expp, lookup_tbl, symtab,fnc_map, ns);
@@ -661,6 +769,8 @@ impl Backend {
                 Backend::construct_expr(expr, lookup_tbl, symtab,fnc_map, ns);
             }
             Builtin(_locs, _typ, _builtin, expr) => {
+                let msg = Backend::construct_builtins(_builtin , ns);
+                lookup_tbl.push((_locs.1 as u64, _locs.2 as u64, msg));
                 for expp in expr {
                     Backend::construct_expr(expp, lookup_tbl, symtab,fnc_map, ns);
                 }
@@ -878,7 +988,6 @@ impl Backend {
             offset
         );
         for (_l1, _r1, msg) in lookup_tbl {
-
             
             if *_l1 <= *offset && *offset <= *_r1 {
                 let new_msg = &msg[..];
@@ -887,7 +996,6 @@ impl Backend {
                 break;
             }
             
-
             /*
             let mut msg1 = format!("AAA {} {} {} BBB\n", _l1, _r1, msg);
             msg1 = msg1.to_owned();
@@ -904,6 +1012,7 @@ impl Backend {
             res.push_str(&samp1);
         }
         */
+
         res
     }
 }
@@ -1117,11 +1226,17 @@ impl LanguageServer for Backend {
 
             Backend::traverse(&ns, &mut lookup_tbl, &mut fnc_map);
 
-            let fl = &ns.files[0];
+            //let mut indx=0;
+            //let mut file_cont = Rc::new(String::new());
+            let mut file_str = " ".to_owned();
+            for fils in ns.files.iter() {
+                //let fl = &ns.files[indx];
+                let file_cont = filecache.get_file_contents(fils.as_str());
+                file_str.push_str(file_cont.as_str()); //format!("{}{}", file_str, file_cont.as_str());
+                //indx+=1;
+            }
 
-            let file_cont = filecache.get_file_contents(fl.as_str());
-
-            let offst = Backend::line_char_to_offset(pos.line, pos.character, &file_cont.as_str()); // 0 based offset
+            let offst = Backend::line_char_to_offset(pos.line, pos.character, &file_str); // 0 based offset
 
             let msg = Backend::get_hover_msg(&offst, &lookup_tbl, &fnc_map);
 
